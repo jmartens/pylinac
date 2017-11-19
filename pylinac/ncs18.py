@@ -66,4 +66,3 @@ def k_pol(m_reference=(1, 2), m_negative=(-3, -4), m_positive=(5, 6)):
         m_negative_avg = -m_negative_avg
 
     return (abs(m_positive_avg) + abs(m_negative_avg)) / (2 * m_reference_avg)
-
