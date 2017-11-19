@@ -20,3 +20,26 @@ class TestFunctions(TestCase):
         expected_k_pols = (1.0, 1.010, -0.993)
         for reference, negative, positive, expected_k_pol in zip(m_references, m_negatives, m_positives, expected_k_pols):
             self.assertAlmostEqual(ncs18.k_pol(reference, negative, positive), expected_k_pol, delta=0.001)
+
+    def test_k_s(self):
+        low_vals = (20, 20.05)
+        high_vals = (20, 20.1)
+        expected_pion = (1.0, 1.0012)
+        for low, high, exp in zip(low_vals, high_vals, expected_pion):
+            self.assertAlmostEqual(ncs18.k_s(300, 100, high, low), exp, delta=0.001)
+
+    def test_k_s_cohort_lbound(self):
+        with self.assertRaises(ValueError):
+            ncs18.k_s(100, 100, 1, 2)
+
+    def test_k_s_cohort_ubound(self):
+        with self.assertRaises(ValueError):
+            ncs18.k_s(1100, 100, 1, 2)
+
+    def test_k_s_cohort_ratio_too_low(self):
+        with self.assertWarns(RuntimeWarning):
+            ncs18.k_s(200, 100, 1, 2)
+
+    def test_k_s_cohort_ratio_not_found(self):
+        with self.assertRaises(ValueError):
+            ncs18.k_s(360, 100, 1, 2)
