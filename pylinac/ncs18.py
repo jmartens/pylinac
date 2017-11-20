@@ -46,6 +46,28 @@ CHAMBERS_PHOTONS = {
     '2611A': {"X0": 0.8971, "C": 15.15, "A": 0.80},
 }
 
+"""
+Quadratic fit coefficients for pulsed radiation as a function of the voltage ratio U1/U2). Data are taken from Weinhous 
+and Meli [1]_
+Source: NCS-18, Table 4 (p. 36)
+
+[1]_ Weinhous M.S., Meli A.M., Determinating Pion, the correction factor for recombination losses in an ionisation 
+chamber, Med. Phys. 11 846-849, 1984.
+"""
+CHAMBERS_ELECTRONS = {
+    # PTW
+    '30010': {'a': 0.9345, 'b': 0.0057, 'c': 0.7733},
+
+    # IBA
+    'FC65G': {'a': 0.9345, 'b': 0.0057, 'c': 0.7733},
+
+    # Other
+    '2571': {'a': 0.9345, 'b': 0.0057, 'c': 0.7733},
+    'NACP02': {'a': 1.1955, 'b': 0.2274, 'c': 0.1479},
+    'Roos': {'a': 1.1376, 'b': 0.1700, 'c': 0.1835},
+}
+
+
 def k_tp(temp=Q_(20, 'celsius'), press=Q_(101.325, 'kPa')):
     """Calculate the temperature and pressure correction according to NCS-18 A.2 (p. 33) as defined in equation 17
 
@@ -102,6 +124,33 @@ def k_pol(m_reference=(1, 2), m_negative=(-3, -4), m_positive=(5, 6)):
     return (abs(m_positive_avg) + abs(m_negative_avg)) / (2 * m_reference_avg)
 
 
+def d_ref(i_50):
+    """Calculate the dref of an electron beam based on the I50 depth.
+
+    Parameters
+    ----------
+    i_50 : float
+        The value of I50 in cm.
+    """
+    r50 = r_50(i_50)
+    return 0.6*r50-0.1
+
+
+def r_50(i_50):
+    """Calculate the R50 depth of an electron beam based on the I50 depth.
+
+    Parameters
+    ----------
+    i_50 : float
+        The value of I50 in cm.
+    """
+    if i_50 <= 10:
+        r50 = 1.029 * i_50 - 0.06
+    else:
+        r50 = 1.59 * i_50 - 0.37
+    return r50
+
+
 def k_s(volt_high=300, volt_low=100, m_high=(1, 2), m_low=(3, 4)):
     """Calculate the recombination correction according to NCS-18 A.2 (p. 36) as defined in equation 21
 
@@ -146,6 +195,9 @@ def k_q(model='30012', tpr=None, r_50=None):
     r_50 : float
         The R50 value in cm of an electron beam.
 
+    .. warning::
+        Only 1 of  ``tpr`` or ``r_50`` can be defined.
+    """
     # TODO: check if this range (from TG51) applies to NCS 18
     TPR_LOW = 0.623
     TPR_HIGH = 0.805
@@ -163,3 +215,8 @@ def k_q(model='30012', tpr=None, r_50=None):
             ch = CHAMBERS_PHOTONS[model]
             # NCS-18 A.4, p. 40, eq 30
             return ch['A'] + (1 - ch['A']) * (1 + numpy.exp(ch['C'] * (0.57 - ch['X0'])))/(1 + numpy.exp(ch['C'] * (tpr - ch['X0'])))
+
+    if r_50 is not None:
+        ch = CHAMBERS_ELECTRONS[model]
+        # Farmer type chambers, eq 37
+        return ch['A'] - ch['B'] * r_50**ch['C']
