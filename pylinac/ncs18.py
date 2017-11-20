@@ -29,6 +29,22 @@ RECOMBINATION_COHORTS = {
     10.0: [0.05909, -0.01041, 0.9516],
 }
 
+"""
+List of the recommended graphite-walled cylindrical chambers together with the parameters of the sigmoid fit
+Source: NCS 18, Table 10 (p. 54)
+"""
+CHAMBERS_PHOTONS = {
+    # PTW
+    '30012': {"X0": 0.9198, "C": 11.67, "A": 0.80},
+
+    # IBA
+    'FC65-G': {"X0": 0.9198, "C": 11.67, "A": 0.80},
+
+    # Other
+    '2561': {"X0": 0.8971, "C": 15.15, "A": 0.80},
+    '2571': {"X0": 0.9198, "C": 11.67, "A": 0.80},
+    '2611A': {"X0": 0.8971, "C": 15.15, "A": 0.80},
+}
 
 def k_tp(temp=Q_(20, 'celsius'), press=Q_(101.325, 'kPa')):
     """Calculate the temperature and pressure correction according to NCS-18 A.2 (p. 33) as defined in equation 17
@@ -114,3 +130,36 @@ def k_s(volt_high=300, volt_low=100, m_high=(1, 2), m_low=(3, 4)):
         return poly(numpy.mean(m_high) / numpy.mean(m_low))
     except KeyError:
         raise ValueError('Unsupported ratio of voltages')
+
+
+def k_q(model='30012', tpr=None, r_50=None):
+    """Calculate beam quality correction as described in NCS-18 A.2 (p. 50) as defined in equation 30 and fit parameters
+    in Table 10 (p. 54)
+
+    Parameters
+    ----------
+    model : str
+        The model of the chamber. Valid values are those listed in
+        Table III of Muir and Rodgers and Table I of the TG-51 Addendum.
+    tpr : {>0.623, <0.805}
+        The TPR ratio of the 20cm measurement divided by the 10cm measurement.
+    r_50 : float
+        The R50 value in cm of an electron beam.
+
+    # TODO: check if this range (from TG51) applies to NCS 18
+    TPR_LOW = 0.623
+    TPR_HIGH = 0.805
+
+    # error checking
+    if not any((tpr, r_50)):
+        raise ValueError("At least one of the parameters tpr or r_50 must be defined.")
+    if tpr and r_50 is not None:
+        raise ValueError("Cannot define both a photon component (TPR) and an electron component (R50)")
+
+    if tpr is not None:
+        if tpr > TPR_HIGH or tpr < TPR_LOW:
+            raise ValueError("Measured TPR is out of range; must be between {:2.2} and {:2.2}.".format(TPR_LOW, TPR_HIGH))
+        else:
+            ch = CHAMBERS_PHOTONS[model]
+            # NCS-18 A.4, p. 40, eq 30
+            return ch['A'] + (1 - ch['A']) * (1 + numpy.exp(ch['C'] * (0.57 - ch['X0'])))/(1 + numpy.exp(ch['C'] * (tpr - ch['X0'])))
