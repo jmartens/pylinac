@@ -124,18 +124,6 @@ def k_pol(m_reference=(1, 2), m_negative=(-3, -4), m_positive=(5, 6)):
     return (abs(m_positive_avg) + abs(m_negative_avg)) / (2 * m_reference_avg)
 
 
-def d_ref(i_50):
-    """Calculate the dref of an electron beam based on the I50 depth.
-
-    Parameters
-    ----------
-    i_50 : float
-        The value of I50 in cm.
-    """
-    r50 = r_50(i_50)
-    return 0.6*r50-0.1
-
-
 def r_50(i_50):
     """Calculate the R50 depth of an electron beam based on the I50 depth.
 
