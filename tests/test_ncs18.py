@@ -23,10 +23,10 @@ class TestFunctions(TestCase):
 
     def test_k_s(self):
         low_vals = (20, 20.05)
-        high_vals = (20, 20.1)
+        normal_vals = (20, 20.1)
         expected_pion = (1.0, 1.0012)
-        for low, high, exp in zip(low_vals, high_vals, expected_pion):
-            self.assertAlmostEqual(ncs18.k_s(300, 100, high, low), exp, delta=0.001)
+        for low, normal, exp in zip(low_vals, normal_vals, expected_pion):
+            self.assertAlmostEqual(ncs18.k_s(300, 100, normal, low), exp, delta=0.001)
 
     def test_k_s_cohort_lbound(self):
         with self.assertRaises(ValueError):

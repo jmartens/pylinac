@@ -151,22 +151,22 @@ def r_50(i_50):
     return r50
 
 
-def k_s(volt_high=300, volt_low=100, m_high=(1, 2), m_low=(3, 4)):
+def k_s(volt_normal=300, volt_low=100, m_normal=(1, 2), m_low=(3, 4)):
     """Calculate the recombination correction according to NCS-18 A.2 (p. 36) as defined in equation 21
 
     Parameters
     ----------
-    volt_high : int
+    volt_normal : int
         The "high" voltage; same as the NCS 18 measurement voltage.
     volt_low : int
         The "low" voltage; usually a third or less of the high voltage.
-    m_high : float, iterable
+    m_normal : float, iterable
         The readings of the ion chamber at the "high" voltage.
     m_low : float, iterable
         The readings of the ion chamber at the "low" voltage.
     """
 
-    ratio = round(volt_high / volt_low, 1)
+    ratio = round(volt_normal / volt_low, 1)
     if ratio < 3:
         warn('A voltage ratio < 3 is not recommended, see for details NCS 18, A. 2 (p. 36)', RuntimeWarning)
 
@@ -176,7 +176,7 @@ def k_s(volt_high=300, volt_low=100, m_high=(1, 2), m_low=(3, 4)):
     try:
         fit_coefficients = RECOMBINATION_COHORTS[ratio]
         poly = numpy.poly1d(fit_coefficients)
-        return poly(numpy.mean(m_high) / numpy.mean(m_low))
+        return poly(numpy.mean(m_normal) / numpy.mean(m_low))
     except KeyError:
         raise ValueError('Unsupported ratio of voltages')
 
