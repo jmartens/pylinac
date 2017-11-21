@@ -43,3 +43,15 @@ class TestFunctions(TestCase):
     def test_k_s_cohort_ratio_not_found(self):
         with self.assertRaises(ValueError):
             ncs18.k_s(360, 100, 1, 2)
+
+    def test_k_q_r50(self):
+        self.assertAlmostEqual(ncs18.k_q(model='Roos', r_50=ncs18.r_50(6.16)), 0.899, delta=0.001)
+
+    def test_r_50_le_10(self):
+        self.assertAlmostEqual(ncs18.r_50(9.9), 10.127, delta=0.001)
+
+    def test_r_50_eq_10(self):
+        self.assertAlmostEqual(ncs18.r_50(10), 10.229, delta=0.001)
+
+    def test_r_50_gt_10(self):
+        self.assertAlmostEqual(ncs18.r_50(10.1), 15.689, delta=0.001)
