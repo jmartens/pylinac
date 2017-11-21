@@ -55,3 +55,22 @@ class TestFunctions(TestCase):
 
     def test_r_50_gt_10(self):
         self.assertAlmostEqual(ncs18.r_50(10.1), 15.689, delta=0.001)
+
+    def test_k_q_no_tpr_and_r50(self):
+        with self.assertRaises(ValueError):
+            ncs18.k_q()
+
+    def test_k_q_tpr_and_r50(self):
+        with self.assertRaises(ValueError):
+            ncs18.k_q(model='30012', tpr=0.0667, r_50=ncs18.r_50(0.67))
+
+    def test_k_q_tpr_lbound(self):
+        with self.assertRaises(ValueError):
+            ncs18.k_q(model='30012', tpr=0)
+
+    def test_k_q_tpr_ubound(self):
+        with self.assertRaises(ValueError):
+            ncs18.k_q(model='30012', tpr=1)
+
+    def test_k_q_tpr(self):
+        self.assertAlmostEqual(ncs18.k_q(model='30012', tpr=0.667), 0.993, delta=0.001)
