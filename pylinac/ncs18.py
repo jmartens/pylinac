@@ -208,3 +208,24 @@ def k_q(model='30012', tpr=None, r_50=None):
         ch = CHAMBERS_ELECTRONS[model]
         # Farmer type chambers, eq 37
         return ch['A'] - ch['B'] * r_50**ch['C']
+
+
+def m_corrected(k_tp=1.0, k_pol=1.0, k_s=1.0, m_raw=(1.1, 2.2)):
+    """Calculate M_corrected, the ion chamber reading with all corrections applied.
+
+    Parameters
+    ----------
+    k_tp : float
+        The temperature & pressure correction.
+    k_pol : float
+        The polarity correction.
+    k_s : float
+        The recombination correction.
+    m_raw : float, iterable
+        The raw ion chamber readings.
+
+    Returns
+    -------
+    float
+    """
+    return k_tp * k_pol * k_s * numpy.mean(m_raw)

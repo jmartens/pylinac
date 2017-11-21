@@ -74,3 +74,6 @@ class TestFunctions(TestCase):
 
     def test_k_q_tpr(self):
         self.assertAlmostEqual(ncs18.k_q(model='30012', tpr=0.667), 0.993, delta=0.001)
+
+    def test_m_corrected(self):
+        self.assertAlmostEqual(ncs18.m_corrected(k_tp=1.0, k_pol=1.0, k_s=1.0, m_raw=(1.1, 2.2)), 1.65, delta=0.001)
