@@ -77,3 +77,45 @@ class TestFunctions(TestCase):
 
     def test_m_corrected(self):
         self.assertAlmostEqual(ncs18.m_corrected(k_tp=1.0, k_pol=1.0, k_s=1.0, m_raw=(1.1, 2.2)), 1.65, delta=0.001)
+
+
+class TestNCS18Base(TestCase):
+    temperature = Q_(20, 'celsius')
+    pressure = Q_(1013.25, 'mbar')
+    model = '30012'
+    volt_high = -400
+    volt_low = -133
+    m_raw = (20, 20, 20)
+    m_opp = (20, 20, 20)
+    m_low = (20, 20, 20)
+
+    def setUp(self):
+        self.ncs18 = ncs18.NCS18Base(
+            temp=self.temperature,
+            press=self.pressure,
+            model=self.model,
+            volt_reference=self.volt_high,
+            volt_low=self.volt_low,
+            m_raw=self.m_raw,
+            m_reference=self.m_raw,
+            m_opposite=self.m_opp,
+            m_low=self.m_low,
+            adjusted_m_raw=self.m_raw)
+
+    def test_k_tp(self):
+        self.assertAlmostEqual(self.ncs18.k_tp, 1, delta=0.0005)
+
+    def test_k_pol(self):
+        self.assertAlmostEqual(self.ncs18.k_pol, 1, delta=0.0005)
+
+    def test_k_s(self):
+        self.assertAlmostEqual(self.ncs18.k_s, 1, delta=0.0005)
+
+    def test_m_corrected(self):
+        self.assertAlmostEqual(self.ncs18.m_corrected, 20, delta=0.0005)
+
+    def test_adjusted_m_corrected(self):
+        self.assertAlmostEqual(self.ncs18.adjusted_m_corrected, 20, delta=0.0005)
+
+    def test_output_was_adjusted(self):
+        self.assertEqual(self.ncs18.output_was_adjusted, True)

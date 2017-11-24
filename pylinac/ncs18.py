@@ -11,6 +11,7 @@ raw measurements and the class will compute all corrections and corrected readin
 from pylinac import Q_
 import numpy
 from warnings import warn
+from .core.utilities import Structure
 
 
 """Quadratic fit coefficients for pulsed radiation as a function of the voltage ratio U1/U2). Data are taken from 
@@ -229,3 +230,36 @@ def m_corrected(k_tp=1.0, k_pol=1.0, k_s=1.0, m_raw=(1.1, 2.2)):
     float
     """
     return k_tp * k_pol * k_s * numpy.mean(m_raw)
+
+
+class NCS18Base(Structure):
+
+    @property
+    def k_tp(self):
+        """Temperature/Pressure correction."""
+        return k_tp(self.temp, self.press)
+
+    @property
+    def k_pol(self):
+        """Polarity correction."""
+        return k_pol(self.m_reference, self.m_opposite, self.m_reference)
+
+    @property
+    def k_s(self):
+        """Polarity correction."""
+        return k_s(self.volt_reference, self.volt_low, self.m_reference, self.m_low)
+
+    @property
+    def m_corrected(self):
+        """Corrected chamber reading."""
+        return m_corrected(self.k_tp, self.k_pol, self.k_s, self.m_raw)
+
+    @property
+    def adjusted_m_corrected(self):
+        """Corrected chamber reading after adjusting the output."""
+        return m_corrected(self.k_tp, self.k_pol, self.k_s, self.adjusted_m_raw)
+
+    @property
+    def output_was_adjusted(self):
+        """Boolean specifiying if output was adjusted."""
+        return self.adjusted_m_raw is not None
