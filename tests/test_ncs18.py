@@ -168,3 +168,70 @@ class TestNCS18Photon(TestNCS18Base):
 
     def test_adjusted_dose_mu_dmax(self):
         self.assertAlmostEqual(self.ncs18.adjusted_dose_mu_dmax, self.dose_10 / self.clinical_pdd / self.mu, delta=0.001)
+
+
+class TestNCS18Electron(TestNCS18Base):
+
+    model = 'Roos'
+    i_50 = 6.16
+    n_dw = 8.170841946
+    mu = 100
+    clinical_pdd = 0.977
+
+    dose_dref = clinical_pdd * 150.44491101448304
+
+    def setUp(self):
+        self.ncs18 = ncs18.NCS18Electron(
+            temp=self.temperature,
+            press=self.pressure,
+            model=self.model,
+            volt_reference=self.volt_high,
+            volt_low=self.volt_low,
+            m_raw=self.m_raw,
+            m_reference=self.m_raw,
+            m_opposite=self.m_opp,
+            m_low=self.m_low,
+            adjusted_m_raw=self.m_raw,
+            i_50=self.i_50,
+            n_dw=self.n_dw,
+            mu=self.mu,
+            clinical_pdd=self.clinical_pdd)
+
+    def test_k_tp(self):
+        self.assertAlmostEqual(self.ncs18.k_tp, 1, delta=0.0005)
+
+    def test_k_pol(self):
+        self.assertAlmostEqual(self.ncs18.k_pol, 1, delta=0.0005)
+
+    def test_k_s(self):
+        self.assertAlmostEqual(self.ncs18.k_s, 1, delta=0.0005)
+
+    def test_k_q(self):
+        self.assertAlmostEqual(self.ncs18.k_q, 0.899446342, delta=0.0005)
+
+    def test_m_corrected(self):
+        self.assertAlmostEqual(self.ncs18.m_corrected, 20, delta=0.0005)
+
+    def test_dose_dref(self):
+        self.assertAlmostEqual(self.ncs18.dose_dref, self.dose_dref, delta=0.0005)
+
+    def test_dose_mu_dref(self):
+        self.assertAlmostEqual(self.ncs18.dose_mu_dref, self.dose_dref / self.mu, delta=0.0005)
+
+    def test_dose_dmax(self):
+        self.assertAlmostEqual(self.ncs18.dose_dmax, self.dose_dref / self.clinical_pdd, delta=0.0005)
+
+    def test_dose_mu_dmax(self):
+        self.assertAlmostEqual(self.ncs18.dose_mu_dmax, self.dose_dref / self.clinical_pdd / self.mu, delta=0.0005)
+
+    def test_adjusted_dose_dref(self):
+        self.assertAlmostEqual(self.ncs18.adjusted_dose_dref, self.dose_dref, delta=0.0005)
+
+    def test_adjusted_dose_mu_dref(self):
+        self.assertAlmostEqual(self.ncs18.adjusted_dose_mu_dref, self.dose_dref / self.mu, delta=0.0005)
+
+    def test_adjusted_dose_dmax(self):
+        self.assertAlmostEqual(self.ncs18.adjusted_dose_dmax, self.dose_dref / self.clinical_pdd, delta=0.0005)
+
+    def test_adjusted_dose_mu_dmax(self):
+        self.assertAlmostEqual(self.ncs18.adjusted_dose_mu_dmax, self.dose_dref / self.clinical_pdd / self.mu, delta=0.0005)

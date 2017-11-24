@@ -312,3 +312,57 @@ class NCS18Photon(NCS18Base):
     def adjusted_dose_mu_dmax(self):
         """Dose per MU at a depth of dmax depth after adjustment."""
         return self.adjusted_dose_dmax / self.mu
+
+
+class NCS18Electron(NCS18Base):
+    """Class for calculating absolute dose to water in an electron beam."""
+
+    @property
+    def r_50(self):
+        """Depth of the 50% dose value."""
+        return r_50(self.i_50)
+
+    @property
+    def k_q(self):
+        """The kQ value using the updated Muir & Rodgers values from their 2014 paper, equation 11."""
+        return k_q(self.model, r_50=self.r_50)
+
+    @property
+    def dose_dref(self):
+        """Dose per MU at the depth of Dref."""
+        return self.m_corrected * self.k_q * self.n_dw
+
+    @property
+    def dose_mu_dref(self):
+        """Dose per MU at the depth of Dref."""
+        return self.dose_dref / self.mu
+
+    @property
+    def dose_dmax(self):
+        """Dose per MU at the depth of dmax."""
+        return self.dose_dref / self.clinical_pdd
+
+    @property
+    def dose_mu_dmax(self):
+        """Dose per MU at the depth of dmax."""
+        return self.dose_dmax / self.mu
+
+    @property
+    def adjusted_dose_dref(self):
+        """Doser per MU at the depth of Dref."""
+        return self.adjusted_m_corrected * self.k_q * self.n_dw
+
+    @property
+    def adjusted_dose_mu_dref(self):
+        """Doser per MU at the depth of Dref."""
+        return self.adjusted_dose_dref / self.mu
+
+    @property
+    def adjusted_dose_dmax(self):
+        """Dose per MU at the depth of dmax."""
+        return self.adjusted_dose_dref / self.clinical_pdd
+
+    @property
+    def adjusted_dose_mu_dmax(self):
+        """Dose per MU at the depth of dmax."""
+        return self.adjusted_dose_dmax / self.mu
