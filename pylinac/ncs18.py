@@ -263,3 +263,52 @@ class NCS18Base(Structure):
     def output_was_adjusted(self):
         """Boolean specifiying if output was adjusted."""
         return self.adjusted_m_raw is not None
+
+
+class NCS18Photon(NCS18Base):
+    """Class for calculating absolute dose to water using a cylindrical chamber in a photon beam."""
+
+    @property
+    def k_q(self):
+        """The chamber-specific beam quality correction factor."""
+        return k_q(self.model, self.tpr)
+
+    @property
+    def dose_10(self):
+        """Dose at a depth of 10cm."""
+        return self.m_corrected * self.k_q * self.n_dw
+
+    @property
+    def dose_mu_10(self):
+        """Dose per MU at a depth of 10cm."""
+        return self.dose_10 / self.mu
+
+    @property
+    def dose_dmax(self):
+        """Dose at a depth of dmax."""
+        return self.dose_10 / self.clinical_pdd
+
+    @property
+    def dose_mu_dmax(self):
+        """Dose per MU at a depth of dmax."""
+        return self.dose_dmax / self.mu
+
+    @property
+    def adjusted_dose_10(self):
+        """Dose at a depth of 10cm after adjustment."""
+        return self.adjusted_m_corrected * self.k_q * self.n_dw
+
+    @property
+    def adjusted_dose_mu_10(self):
+        """Dose per MU at a depth of 10cm after adjustment."""
+        return self.adjusted_dose_10 / self.mu
+
+    @property
+    def adjusted_dose_dmax(self):
+        """Dose at depth of dmax after adjustment."""
+        return self.adjusted_dose_10 / self.clinical_pdd
+
+    @property
+    def adjusted_dose_mu_dmax(self):
+        """Dose per MU at a depth of dmax depth after adjustment."""
+        return self.adjusted_dose_dmax / self.mu

@@ -119,3 +119,52 @@ class TestNCS18Base(TestCase):
 
     def test_output_was_adjusted(self):
         self.assertEqual(self.ncs18.output_was_adjusted, True)
+
+
+class TestNCS18Photon(TestNCS18Base):
+
+    n_dw = 5.555
+    dose_10 = 110.34323003428072
+    clinical_pdd = 0.66
+    mu = 200
+
+    def setUp(self):
+        self.ncs18 = ncs18.NCS18Photon(
+            temp=self.temperature,
+            press=self.pressure,
+            model=self.model,
+            volt_reference=self.volt_high,
+            volt_low=self.volt_low,
+            m_raw=self.m_raw,
+            m_reference=self.m_raw,
+            m_opposite=self.m_opp,
+            m_low=self.m_low,
+            adjusted_m_raw=self.m_raw,
+            tpr=0.667642978,
+            n_dw=self.n_dw,
+            mu=self.mu,
+            clinical_pdd=self.clinical_pdd)
+
+    def test_dose_10(self):
+        self.assertAlmostEqual(self.ncs18.dose_10, self.dose_10, delta=0.1)
+
+    def test_dose_mu_10(self):
+        self.assertAlmostEqual(self.ncs18.dose_mu_10, self.dose_10/self.mu, delta=0.001)
+
+    def test_dose_dmax(self):
+        self.assertAlmostEqual(self.ncs18.dose_dmax, self.dose_10 / self.clinical_pdd, delta=0.001)
+
+    def test_dose_mu_dmax(self):
+        self.assertAlmostEqual(self.ncs18.dose_mu_dmax, self.dose_10 / self.clinical_pdd / self.mu, delta=0.001)
+
+    def test_adjusted_dose_10(self):
+        self.assertAlmostEqual(self.ncs18.adjusted_dose_10, self.dose_10, delta=0.1)
+
+    def test_adjusted_dose_mu_10(self):
+        self.assertAlmostEqual(self.ncs18.adjusted_dose_mu_10, self.dose_10/self.mu, delta=0.001)
+
+    def test_adjusted_dose_dmax(self):
+        self.assertAlmostEqual(self.ncs18.adjusted_dose_dmax, self.dose_10 / self.clinical_pdd, delta=0.001)
+
+    def test_adjusted_dose_mu_dmax(self):
+        self.assertAlmostEqual(self.ncs18.adjusted_dose_mu_dmax, self.dose_10 / self.clinical_pdd / self.mu, delta=0.001)
