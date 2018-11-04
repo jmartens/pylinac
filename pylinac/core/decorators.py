@@ -39,8 +39,7 @@ def type_accept(*type_args, **type_kwargs):
                         if not isinstance(value, bound_types[name]):
                             raise TypeError("Argument '{0}' must be {1}".format(name, bound_types[name]))
                     else:
-                        if type(value) not in bound_types[name]:
-                            if value not in bound_types[name]:
+                        if type(value) not in bound_types[name] and value not in bound_types[name]:
                                 raise TypeError("Argument '{0}' must be {1}".format(name, bound_types[name]))
             return func(*args, **kwargs)
         return wrapper
