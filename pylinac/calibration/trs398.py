@@ -348,7 +348,7 @@ class TRS398Photon(TRS398Base):
                  k_elec: float,
                  clinical_pdd_zref: Optional[float]=None,
                  clinical_tmr_zref: Optional[float]=None,
-                 tissue_correction: float=1.0,
+                 tissue_correction: float=1.0
                  ):
         super().__init__(chamber=chamber, tpr2010=tpr2010, press=press, temp=temp,
                          voltage_reference=voltage_reference, voltage_reduced=voltage_reduced, m_reference=m_reference,
@@ -528,7 +528,7 @@ class TRS398Electron(TRS398Base):
                  m_opposite: tuple,
                  k_elec: float,
                  clinical_pdd_zref: float,
-                 tissue_correction: float=1.0,
+                 tissue_correction: float=1.0
                  ):
         super().__init__(chamber=chamber, i_50=i_50, press=press, temp=temp, energy=energy, institution=institution,
                          voltage_reference=voltage_reference, voltage_reduced=voltage_reduced, m_reference=m_reference,
