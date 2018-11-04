@@ -1090,8 +1090,6 @@ class CatPhanBase:
         hu_slices = []
         for image_number in range(0, self.num_images, 2):
             slice = Slice(self, image_number, combine=False)
-            #print(image_number)
-            # slice.image.plot()
             try:
                 center = slice.phan_center
             except ValueError:  # a slice without the phantom in view

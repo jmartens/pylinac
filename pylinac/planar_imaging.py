@@ -251,8 +251,6 @@ class LasVegas(ImagePhantomBase):
                 roi.plot2axes(img_ax, edgecolor=roi.plot_color_constant)
             for roi in self.bg_rois:
                 roi.plot2axes(img_ax, edgecolor='g')
-            # c = Circle(self.phantom_center, radius=5)
-            # c.plot2axes(img_ax, edgecolor='r')
 
         # plot the low contrast values
         if low_contrast:

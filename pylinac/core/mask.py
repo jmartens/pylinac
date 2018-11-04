@@ -55,7 +55,6 @@ def sector_mask(shape: Tuple, center: Point, radius: NumberLike, angle_range: Tu
 
     x, y = np.ogrid[:shape[0], :shape[1]]
     cy, cx = center.x, center.y
-    # tmin, tmax = np.deg2rad(angle_range)
     tmin, tmax = angle_range
 
     # ensure stop angle > start angle

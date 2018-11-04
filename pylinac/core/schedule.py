@@ -40,10 +40,7 @@ Usage:
 """
 import datetime
 import functools
-# import logging
 import time
-
-# logger = logging.getLogger('schedule')
 
 
 class CancelJob(object):

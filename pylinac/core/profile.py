@@ -640,7 +640,6 @@ class MultiProfile(ProfileMixin):
         original_peaks = copy.deepcopy(self.peaks)
         for num, (peak, profile) in enumerate(zip(self.peaks, subprofiles)):
             shift = original_peaks[num - 1].idx if num > 0 else 0
-            # shift = sum(len(profile.values) for profile in subprofiles[:num])
             fwhmc = profile.fwxm_center(x, interpolate=interpolate)
             peak.idx = fwhmc + shift
 
