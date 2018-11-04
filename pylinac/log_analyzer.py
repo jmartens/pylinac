@@ -1108,21 +1108,17 @@ class MLC:
             inner_leaf_thickness /= 2
             mlc_position = 100
         for leaf in range(1, leaf_num+1):
-            if 10 >= leaf or leaf >= 110:
+            if 10 >= leaf or leaf >= 110 or 50 > leaf and leaf < 70:
                 mlc_position += outer_leaf_thickness
             elif 50 >= leaf or leaf >= 70:
                 mlc_position += inner_leaf_thickness
-            else:  # between 50 and 70
-                mlc_position += outer_leaf_thickness
 
         y2_position = self._jaws.y2.actual.max()*10 + 200
         y1_position = 200 - self._jaws.y1.actual.max()*10
-        if 10 >= leaf or leaf >= 110:
+        if 10 >= leaf or leaf >= 110 or 50 > leaf and leaf < 70:
             thickness = outer_leaf_thickness
         elif 50 >= leaf or leaf >= 70:
             thickness= inner_leaf_thickness
-        else:  # between 50 and 70
-            thickness = outer_leaf_thickness
         return mlc_position < y1_position or mlc_position - thickness > y2_position
 
     def get_snapshot_values(self, bank_or_leaf='both', dtype='actual'):

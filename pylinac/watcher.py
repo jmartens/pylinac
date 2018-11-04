@@ -79,9 +79,7 @@ class AnalyzeMixin:
         logger.info(self.full_path + " will be analyzed...")
         self.instance = self.obj(self.full_path, **self.constructor_kwargs)
         self.analyze()
-        if self.config['email']['enable-all']:
-            self.send_email()
-        elif self.config['email']['enable-failure'] and self.should_send_failure_email():
+        if self.config['email']['enable-all'] or self.config['email']['enable-failure'] and self.should_send_failure_email():
             self.send_email()
         self.publish_pdf()
         # self.save_zip()
@@ -257,9 +255,7 @@ class AnalyzeLog(AnalyzeMixin):
             self.analyze()
             self.publish_pdf()
             self.save_zip()
-            if self.config['email']['enable-all']:
-                self.send_email()
-            elif self.config['email']['enable-failure'] and self.should_send_failure_email():
+            if self.config['email']['enable-all'] or self.config['email']['enable-failure'] and self.should_send_failure_email():
                 self.send_email()
         logger.info("Finished analysis on " + self.local_path)
         return True
@@ -382,9 +378,7 @@ class AnalyzeWL(AnalyzeMixin):
             logger.info("Winston Lutz batch will be analyzed...")
         self.instance = self.obj(self.full_path, **self.constructor_kwargs)
         self.analyze()
-        if self.config['email']['enable-all']:
-            self.send_email()
-        elif self.config['email']['enable-failure'] and self.should_send_failure_email():
+        if self.config['email']['enable-all'] or self.config['email']['enable-failure'] and self.should_send_failure_email():
             self.send_email()
         self.publish_pdf()
         if not self.zip_format:
@@ -448,9 +442,7 @@ class AnalyzeVMAT(AnalyzeMixin):
             logger.info("VMAT pair found and will be analyzed...")
             self.instance = self.obj(self.path, delivery_types=('open', 'dmlc'), **self.constructor_kwargs)
         self.analyze()
-        if self.config['email']['enable-all']:
-            self.send_email()
-        elif self.config['email']['enable-failure'] and self.should_send_failure_email():
+        if self.config['email']['enable-all'] or self.config['email']['enable-failure'] and self.should_send_failure_email():
             self.send_email()
         self.publish_pdf()
         if not self.zip_format:

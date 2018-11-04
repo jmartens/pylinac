@@ -644,7 +644,7 @@ class CTP528(CatPhanModule):
         self.circle_profile.plot2axes(axis, edgecolor='blue', plot_peaks=False)
 
     def preprocess(self, catphan):
-        if isinstance(catphan, CatPhan504):
+        if isinstance(catphan, (CatPhan504, CatPhan604)):
             self.start_angle = np.pi
             self.ccw = True
         elif isinstance(catphan, CatPhan503):
@@ -653,9 +653,6 @@ class CTP528(CatPhanModule):
         elif isinstance(catphan, CatPhan600):
             self.start_angle = np.pi - 0.1
             self.ccw = False
-        elif isinstance(catphan, CatPhan604):
-            self.start_angle = np.pi
-            self.ccw = True
 
     @property
     @lru_cache(maxsize=1)
