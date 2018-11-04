@@ -1226,10 +1226,6 @@ class CatPhanBase:
             webbrowser.open(filename)
 
     def _publish_pdf(self, filename, metadata, notes, analysis_title, texts, imgs):
-        try:
-            date = datetime.strptime(self.dicom_stack[0].metadata.InstanceCreationDate, "%Y%m%d").strftime("%A, %B %d, %Y")
-        except:
-            date = "Unknown"
         canvas = pdf.PylinacCanvas(filename, page_title=analysis_title, metadata=metadata)
         if notes is not None:
             canvas.add_text(text="Notes:", location=(1, 4.5), font_size=14)
