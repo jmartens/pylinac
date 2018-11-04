@@ -1668,7 +1668,6 @@ class DynalogAxisData:
         else:
             snapshot_idx = list(range(self.num_snapshots))
 
-        self.num_snapshots = self.num_snapshots
         self.mlc = MLC.from_dlog(log, self.jaws, snapshot_data, snapshot_idx)
 
 
