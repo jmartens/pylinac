@@ -23,7 +23,7 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
-      - uses: casperdcl/deploy-pypi@v2
+      - uses: casperdcl/deploy-pypi@8f3dcf77ac6edd4cb41852ac4f79ebe4af772d59 # v3.0.1
         with:
           user: ${{ secrets.PYPI_USERNAME }}
           password: ${{ secrets.PYPI_PASSWORD }}
