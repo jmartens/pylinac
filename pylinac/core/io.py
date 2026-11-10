@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import math
 import os
 import os.path as osp
@@ -9,17 +10,41 @@ import struct
 import tempfile
 import zipfile
 from collections.abc import Callable
+from contextlib import contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import BinaryIO
 from urllib.error import HTTPError, URLError
+from urllib.parse import unquote, urlparse
 from urllib.request import urlopen, urlretrieve
 
 import numpy as np
 import pydicom
+from google.api_core.exceptions import (
+    DeadlineExceeded,
+    InternalServerError,
+    ServiceUnavailable,
+    TooManyRequests,
+)
+from google.auth.exceptions import TransportError
+from google.cloud import storage
 from tqdm import tqdm
 
 from .profile import SingleProfile
+
+
+def _get_demo_file_generation(name: str) -> str:
+    """Get the generation number of a demo file in the GCS bucket."""
+    client = storage.Client.create_anonymous_client()
+    bucket = client.bucket("pylinac_demo_files")
+    blob = bucket.blob(name)
+    blob.reload()
+    return str(blob.generation)
+
+
+def _get_demo_dir() -> Path:
+    """Return the directory where demo files are stored."""
+    return Path(__file__).parent.parent / "demo_files"
 
 
 def is_dicom(file: str | Path) -> bool:
@@ -153,32 +178,77 @@ def retrieve_filenames(
 
 
 def retrieve_demo_file(name: str, force: bool = False) -> Path:
-    """Retrieve the demo file either by getting it from file or from a URL.
+    """Retrieve a demo file, downloading it if missing or outdated.
 
-    If the file is already on disk it returns the file name. If the file isn't
-    on disk, get the file from the URL and put it at the expected demo file location
-    on disk for lazy loading next time. Downloads are completed in a temporary
-    location before being moved into place so concurrent readers cannot load a
-    partially downloaded file.
+    Files are cached locally. The Google Cloud Storage generation number
+    is used to determine whether a cached file is up to date.
 
     Parameters
     ----------
     name : str
-        The suffix to the URL pointing to the demo file.
+        The name of the demo file in the GCS bucket.
     force : bool
-        Download the file even if it already exists. The existing file is replaced
-        only after the download succeeds.
+        Download the file even if it already exists and is up to date.
+
+    Returns
+    -------
+    Path
+        The local path to the demo file.
     """
-    true_url = r"https://storage.googleapis.com/pylinac_demo_files/" + name
-    demo_path = Path(__file__).parent.parent / "demo_files" / name
-    demo_dir = demo_path.parent
-    os.makedirs(demo_dir, exist_ok=True)
-    if force or not demo_path.exists():
-        # Keep the download on the same filesystem for an atomic replacement.
-        with TemporaryDirectory(dir=demo_dir) as temp_dir:
-            temp_path = Path(temp_dir) / demo_path.name
-            get_url(true_url, destination=temp_path)
-            os.replace(temp_path, demo_path)
+    demo_dir = _get_demo_dir()
+    demo_path = demo_dir / name
+    metadata_path = demo_path.with_name(f".{demo_path.name}.pylinac-cache.json")
+    demo_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Connect anonymously to the public GCS bucket.
+    client = storage.Client.create_anonymous_client()
+    bucket = client.bucket("pylinac_demo_files")
+    blob = bucket.blob(name)
+
+    # Retrieve the remote object's metadata.
+    try:
+        blob.reload()
+    except (
+        TransportError,
+        DeadlineExceeded,
+        InternalServerError,
+        ServiceUnavailable,
+        TooManyRequests,
+    ):
+        # Use the cached copy if the remote service is temporarily unavailable.
+        if demo_path.is_file() and not force:
+            return demo_path
+        raise
+
+    remote_generation = str(blob.generation)
+
+    # Check whether the local file matches the remote version.
+    if demo_path.is_file() and metadata_path.is_file() and not force:
+        try:
+            metadata = json.loads(metadata_path.read_text())
+            if metadata.get("generation") == remote_generation:
+                return demo_path
+        except (OSError, json.JSONDecodeError):
+            # Missing or invalid metadata: redownload the file.
+            pass
+
+    # Download to a temporary file before replacing the cached copy.
+    with TemporaryDirectory(dir=demo_path.parent) as temp_dir:
+        temp_path = Path(temp_dir) / demo_path.name
+
+        blob.download_to_filename(
+            str(temp_path),
+            if_generation_match=blob.generation,
+        )
+
+        # Replace the existing file only after a successful download.
+        os.replace(temp_path, demo_path)
+
+    # Save metadata only after the successful download.
+    metadata_temp = metadata_path.with_suffix(metadata_path.suffix + ".tmp")
+    metadata_temp.write_text(json.dumps({"generation": remote_generation}))
+    os.replace(metadata_temp, metadata_path)
+
     return demo_path
 
 
@@ -351,6 +421,56 @@ class SNCProfiler:
         return x_prof, y_prof, pos_prof, neg_prof
 
 
+def _download_gcs_blob(url: str, destination: Path) -> None:
+    """Download a GCS object using the Google Cloud Storage client."""
+    from urllib.parse import unquote, urlparse
+
+    parsed = urlparse(url)
+
+    if parsed.netloc == "storage.googleapis.com":
+        parts = parsed.path.lstrip("/").split("/", 1)
+        if len(parts) != 2:
+            raise ValueError(f"Invalid GCS URL: {url}")
+        bucket_name, blob_name = parts
+    else:
+        raise ValueError(f"Unsupported GCS URL: {url}")
+
+    client = storage.Client.create_anonymous_client()
+    blob = client.bucket(bucket_name).blob(unquote(blob_name))
+    blob.download_to_filename(str(destination))
+
+
+@contextmanager
+def _download_url(
+    url: str,
+    progress_bar: bool = True,
+):
+    """Download a URL to a temporary directory and yield its local path."""
+    parsed = urlparse(url)
+    filename = Path(parsed.path).name or "download"
+
+    with TemporaryDirectory() as temp_dir:
+        destination = Path(temp_dir) / filename
+
+        if parsed.netloc == "storage.googleapis.com":
+            parts = parsed.path.lstrip("/").split("/", 1)
+            if len(parts) != 2:
+                raise ValueError(f"Invalid GCS URL: {url}")
+
+            bucket_name, blob_name = parts
+            client = storage.Client.create_anonymous_client()
+            blob = client.bucket(bucket_name).blob(unquote(blob_name))
+            blob.download_to_filename(str(destination))
+        else:
+            get_url(
+                url,
+                destination=destination,
+                progress_bar=progress_bar,
+            )
+
+        yield destination
+
+
 class DataUnavailableError(RuntimeError):
     pass
 
@@ -387,20 +507,19 @@ class LoadableMixin:
 
     @classmethod
     def from_url(cls, url: str, progress_bar: bool = True, **kwargs):
-        """Download ``url`` to a temporary file and instantiate ``cls``.
-
-        If the downloaded file is a ZIP archive, ``from_zip`` is used. Otherwise the
-        downloaded file path is forwarded to the class constructor.
-        """
-        filename = get_url(url, progress_bar=progress_bar)
-        # Some downloaders save temporary files without the original suffix. Check the
-        # file content to determine if it is a ZIP archive.
-        if zipfile.is_zipfile(filename):
-            return cls.from_zip(filename, **kwargs)
-        return cls(filename, **kwargs)
+        """Download ``url`` to a temporary file and instantiate ``cls``."""
+        with _download_url(url, progress_bar=progress_bar) as filename:
+            if zipfile.is_zipfile(filename):
+                return cls.from_zip(filename, **kwargs)
+            return cls(filename, **kwargs)
 
     @classmethod
-    def from_demo(cls, name: str | None = None, **kwargs):
+    def from_demo(
+        cls,
+        name: str | None = None,
+        force: bool = False,
+        **kwargs,
+    ):
         """Instantiate ``cls`` using the repository demo file registry.
 
         The demo file name is taken from the provided ``name`` argument or the class
@@ -421,7 +540,7 @@ class LoadableMixin:
             raise DataUnavailableError(
                 f"No demo file available for class {cls.__name__}"
             )
-        demo_path = retrieve_demo_file(demo_name)
+        demo_path = retrieve_demo_file(demo_name, force=force)
         # Merge class-provided demo kwargs if present (e.g., sid, dpi)
         demo_defaults = getattr(cls, "DEMO_KWARGS", {}) or {}
         merged_kwargs = {**demo_defaults, **kwargs}

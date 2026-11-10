@@ -1,10 +1,19 @@
 """Test suite for the pylinac.io module."""
 
+import json
 import os
 import os.path as osp
 import unittest
+import zipfile
+from io import BytesIO
+from unittest.mock import MagicMock
+
+import pytest
+from google.api_core.exceptions import NotFound, ServiceUnavailable
+from google.cloud import storage
 
 from pylinac import Interpolation
+from pylinac.core import io
 from pylinac.core.io import (
     DataUnavailableError,
     LoadableMixin,
@@ -160,7 +169,14 @@ class TestLoadableMixin(unittest.TestCase):
         original_get_url = io_mod.get_url
 
         try:
-            io_mod.get_url = lambda url, progress_bar=True: zpath
+
+            def mock_get_url(url, destination=None, progress_bar=True):
+                import shutil
+
+                shutil.copy(zpath, destination)
+                return destination
+
+            io_mod.get_url = mock_get_url
 
             class FromZipDummy(LoadableMixin):
                 ZIP_FILE_GLOB = "*.txt"
@@ -172,14 +188,21 @@ class TestLoadableMixin(unittest.TestCase):
             self.assertEqual(len(inst.files), 1)
 
             # Now non-zip
-            io_mod.get_url = lambda url, progress_bar=True: nonzip
+            def mock_get_url(url, destination=None, progress_bar=True):
+                import shutil
+
+                shutil.copy(nonzip, destination)
+                return destination
+
+            io_mod.get_url = mock_get_url
 
             class FromFileDummy(LoadableMixin):
                 def __init__(self, path, **kwargs):
                     self.path = path
 
             inst2 = FromFileDummy.from_url("http://example.com/file.bin")
-            self.assertTrue(inst2.path.endswith(".bin"))
+            # self.assertTrue(inst2.path.endswith(".bin"))
+            self.assertEqual(inst2.path.suffix, ".bin")
         finally:
             io_mod.get_url = original_get_url
             try:
@@ -230,7 +253,7 @@ class TestLoadableMixin(unittest.TestCase):
         original_retrieve = io_mod.retrieve_demo_file
         try:
             # demo returns zip
-            io_mod.retrieve_demo_file = lambda name: Path(zpath)
+            io_mod.retrieve_demo_file = lambda name, force=False: Path(zpath)
 
             class DemoZip(LoadableMixin):
                 DEMO_FILES = ["demo.zip"]
@@ -243,7 +266,7 @@ class TestLoadableMixin(unittest.TestCase):
             self.assertEqual(len(inst.files), 1)
 
             # demo returns non-zip
-            io_mod.retrieve_demo_file = lambda name: Path(nonzip)
+            io_mod.retrieve_demo_file = lambda name, force=False: Path(nonzip)
 
             class DemoFile(LoadableMixin):
                 DEMO_FILES = ["demo.dat"]
@@ -257,7 +280,8 @@ class TestLoadableMixin(unittest.TestCase):
             # Test from_demo_image/from_demo_images delegate to from_demo
             called = {}
 
-            io_mod.retrieve_demo_file = lambda name: Path(nonzip)
+            # demo returns non-zip
+            io_mod.retrieve_demo_file = lambda name, force=False: Path(nonzip)
 
             class DemoImage(LoadableMixin):
                 DEMO_FILES = ["demo.dat"]
@@ -286,3 +310,322 @@ class TestLoadableMixin(unittest.TestCase):
                 os.remove(nonzip)
             except Exception:
                 pass
+
+
+def _mock_gcs(monkeypatch, generation="123"):
+    """Set up a mocked anonymous GCS client and blob."""
+    blob = MagicMock()
+    blob.generation = generation
+
+    def reload():
+        blob.generation = generation
+
+    blob.reload.side_effect = reload
+
+    def download_to_filename(filename, **kwargs):
+        Path(filename).write_bytes(b"downloaded demo data")
+
+    blob.download_to_filename.side_effect = download_to_filename
+
+    bucket = MagicMock()
+    bucket.blob.return_value = blob
+
+    client = MagicMock()
+    client.bucket.return_value = bucket
+
+    monkeypatch.setattr(
+        storage.Client,
+        "create_anonymous_client",
+        MagicMock(return_value=client),
+    )
+
+    return client, bucket, blob
+
+
+def test_retrieve_demo_file_downloads_when_missing(tmp_path, monkeypatch):
+    monkeypatch.setattr(io, "_get_demo_dir", lambda: tmp_path)
+    _, bucket, blob = _mock_gcs(monkeypatch)
+
+    result = io.retrieve_demo_file("example.zip")
+
+    assert result == tmp_path / "example.zip"
+    assert result.read_bytes() == b"downloaded demo data"
+    assert json.loads((tmp_path / ".example.zip.pylinac-cache.json").read_text()) == {
+        "generation": "123"
+    }
+
+    bucket.blob.assert_called_once_with("example.zip")
+    blob.reload.assert_called_once()
+    blob.download_to_filename.assert_called_once()
+
+    # The download must be pinned to the generation we checked.
+    _, kwargs = blob.download_to_filename.call_args
+    assert kwargs["if_generation_match"] == "123"
+
+
+def test_retrieve_demo_file_uses_cache_when_generation_matches(tmp_path, monkeypatch):
+    monkeypatch.setattr(io, "_get_demo_dir", lambda: tmp_path)
+    _, _, blob = _mock_gcs(monkeypatch)
+
+    demo_path = tmp_path / "example.zip"
+    demo_path.write_bytes(b"already cached")
+    metadata_path = tmp_path / ".example.zip.pylinac-cache.json"
+    metadata_path.write_text(json.dumps({"generation": "123"}))
+
+    result = io.retrieve_demo_file("example.zip")
+
+    assert result == demo_path
+    assert result.read_bytes() == b"already cached"
+    blob.reload.assert_called_once()
+    blob.download_to_filename.assert_not_called()
+
+
+def test_retrieve_demo_file_downloads_when_generation_changes(tmp_path, monkeypatch):
+    monkeypatch.setattr(io, "_get_demo_dir", lambda: tmp_path)
+    _, _, blob = _mock_gcs(monkeypatch, generation="456")
+
+    demo_path = tmp_path / "example.zip"
+    demo_path.write_bytes(b"old cached data")
+    metadata_path = tmp_path / ".example.zip.pylinac-cache.json"
+    metadata_path.write_text(json.dumps({"generation": "123"}))
+
+    result = io.retrieve_demo_file("example.zip")
+
+    assert result.read_bytes() == b"downloaded demo data"
+    assert json.loads(metadata_path.read_text()) == {"generation": "456"}
+    blob.download_to_filename.assert_called_once()
+
+
+def test_retrieve_demo_file_force_downloads_current_file(tmp_path, monkeypatch):
+    monkeypatch.setattr(io, "_get_demo_dir", lambda: tmp_path)
+    _, _, blob = _mock_gcs(monkeypatch)
+
+    demo_path = tmp_path / "example.zip"
+    demo_path.write_bytes(b"already cached")
+    metadata_path = tmp_path / ".example.zip.pylinac-cache.json"
+    metadata_path.write_text(json.dumps({"generation": "123"}))
+
+    result = io.retrieve_demo_file("example.zip", force=True)
+
+    assert result.read_bytes() == b"downloaded demo data"
+    blob.download_to_filename.assert_called_once()
+
+
+def test_retrieve_demo_file_uses_cache_when_service_unavailable(tmp_path, monkeypatch):
+    monkeypatch.setattr(io, "_get_demo_dir", lambda: tmp_path)
+    _, _, blob = _mock_gcs(monkeypatch)
+
+    demo_path = tmp_path / "example.zip"
+    demo_path.write_bytes(b"already cached")
+    blob.reload.side_effect = ServiceUnavailable("Service unavailable")
+
+    result = io.retrieve_demo_file("example.zip")
+
+    assert result == demo_path
+    assert result.read_bytes() == b"already cached"
+    blob.download_to_filename.assert_not_called()
+
+
+def test_retrieve_demo_file_raises_not_found(tmp_path, monkeypatch):
+    monkeypatch.setattr(io, "_get_demo_dir", lambda: tmp_path)
+    _, _, blob = _mock_gcs(monkeypatch)
+
+    blob.reload.side_effect = NotFound("File not found")
+
+    demo_path = tmp_path / "example.zip"
+    demo_path.write_bytes(b"stale cached data")
+
+    with pytest.raises(NotFound):
+        io.retrieve_demo_file("example.zip")
+
+    assert demo_path.read_bytes() == b"stale cached data"
+    blob.download_to_filename.assert_not_called()
+
+
+def test_retrieve_demo_file_redownloads_with_corrupt_metadata(tmp_path, monkeypatch):
+    monkeypatch.setattr(io, "_get_demo_dir", lambda: tmp_path)
+    _, _, blob = _mock_gcs(monkeypatch)
+
+    demo_path = tmp_path / "example.zip"
+    demo_path.write_bytes(b"old cached data")
+    metadata_path = tmp_path / ".example.zip.pylinac-cache.json"
+    metadata_path.write_text("not valid json")
+
+    result = io.retrieve_demo_file("example.zip")
+
+    assert result.read_bytes() == b"downloaded demo data"
+    assert json.loads(metadata_path.read_text()) == {"generation": "123"}
+    blob.download_to_filename.assert_called_once()
+
+
+def test_retrieve_demo_file_preserves_cached_file_when_download_fails(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(io, "_get_demo_dir", lambda: tmp_path)
+    _, _, blob = _mock_gcs(monkeypatch, generation="456")
+
+    demo_path = tmp_path / "example.zip"
+    demo_path.write_bytes(b"old cached data")
+    metadata_path = tmp_path / ".example.zip.pylinac-cache.json"
+    metadata_path.write_text(json.dumps({"generation": "123"}))
+
+    def fail_download(filename, **kwargs):
+        raise ServiceUnavailable("Download failed")
+
+    blob.download_to_filename.side_effect = fail_download
+
+    with pytest.raises(ServiceUnavailable):
+        io.retrieve_demo_file("example.zip")
+
+    assert demo_path.read_bytes() == b"old cached data"
+    assert json.loads(metadata_path.read_text()) == {"generation": "123"}
+
+
+def test_from_demo_uses_gcs_cached_retrieval(monkeypatch, tmp_path):
+    """Ensure LoadableMixin.from_demo delegates demo retrieval to retrieve_demo_file."""
+    from pylinac.core.io import LoadableMixin
+
+    demo_file = tmp_path / "example.zip"
+    demo_file.write_bytes(b"demo data")
+
+    calls = []
+
+    def mock_retrieve_demo_file(name, force=False):
+        calls.append((name, force))
+        return demo_file
+
+    monkeypatch.setattr(io, "retrieve_demo_file", mock_retrieve_demo_file)
+
+    class DemoLoader(LoadableMixin):
+        DEMO_FILES = ["example.zip"]
+
+        @classmethod
+        def from_zip(cls, filename, **kwargs):
+            return filename
+
+    result = DemoLoader.from_demo()
+
+    assert result == demo_file
+    assert calls == [("example.zip", False)]
+
+
+def test_from_demo_forwards_force_to_retrieve_demo_file(monkeypatch, tmp_path):
+    from pylinac.core.io import LoadableMixin
+
+    demo_file = tmp_path / "example.zip"
+    demo_file.write_bytes(b"demo data")
+
+    calls = []
+
+    def mock_retrieve_demo_file(name, force=False):
+        calls.append((name, force))
+        return demo_file
+
+    monkeypatch.setattr(io, "retrieve_demo_file", mock_retrieve_demo_file)
+
+    class DemoLoader(LoadableMixin):
+        DEMO_FILES = ["example.zip"]
+
+        @classmethod
+        def from_zip(cls, filename, **kwargs):
+            return filename
+
+    DemoLoader.from_demo(force=True)
+
+    assert calls == [("example.zip", True)]
+
+
+def test_from_url_uses_anonymous_gcs_client(monkeypatch):
+    """GCS URLs should use the anonymous GCS client, not get_url."""
+    from pylinac.core.io import LoadableMixin
+
+    zip_buffer = BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w") as archive:
+        archive.writestr("example.txt", "hello")
+    zip_data = zip_buffer.getvalue()
+
+    blob = MagicMock()
+
+    def download_to_filename(filename, **kwargs):
+        Path(filename).write_bytes(zip_data)
+
+    blob.download_to_filename.side_effect = download_to_filename
+
+    bucket = MagicMock()
+    bucket.blob.return_value = blob
+
+    client = MagicMock()
+    client.bucket.return_value = bucket
+
+    monkeypatch.setattr(
+        storage.Client,
+        "create_anonymous_client",
+        MagicMock(return_value=client),
+    )
+
+    def unexpected_get_url(*args, **kwargs):
+        pytest.fail("get_url should not be used for GCS URLs")
+
+    monkeypatch.setattr(io, "get_url", unexpected_get_url)
+
+    class ZipLoader(LoadableMixin):
+        @classmethod
+        def from_zip(cls, filename, **kwargs):
+            with zipfile.ZipFile(filename) as archive:
+                return archive.read("example.txt")
+
+    result = ZipLoader.from_url("https://storage.googleapis.com/my-bucket/example.zip")
+
+    assert result == b"hello"
+    client.bucket.assert_called_once_with("my-bucket")
+    bucket.blob.assert_called_once_with("example.zip")
+    blob.download_to_filename.assert_called_once()
+
+
+def test_download_url_rejects_invalid_gcs_url():
+    """Malformed GCS URLs should fail clearly instead of being treated as HTTP."""
+    with pytest.raises(ValueError, match="Invalid GCS URL"):
+        with io._download_url("https://storage.googleapis.com/"):
+            pass
+
+
+def test_download_url_cleans_up_temporary_directory(monkeypatch, tmp_path):
+    """The temporary download should exist inside the context and be removed after."""
+    downloaded_path = None
+    temp_directory = None
+
+    def mock_get_url(url, destination=None, progress_bar=True):
+        Path(destination).write_bytes(b"downloaded")
+        return destination
+
+    monkeypatch.setattr(io, "get_url", mock_get_url)
+
+    with io._download_url("https://example.com/file.bin") as path:
+        downloaded_path = path
+        temp_directory = path.parent
+
+        assert path.exists()
+        assert path.read_bytes() == b"downloaded"
+
+    assert downloaded_path is not None
+    assert temp_directory is not None
+    assert not downloaded_path.exists()
+    assert not temp_directory.exists()
+
+
+def test_retrieve_demo_file_downloads_when_metadata_is_missing(tmp_path, monkeypatch):
+    """An existing file without metadata cannot be verified as current."""
+    monkeypatch.setattr(io, "_get_demo_dir", lambda: tmp_path)
+    _, _, blob = _mock_gcs(monkeypatch)
+
+    demo_path = tmp_path / "example.zip"
+    demo_path.write_bytes(b"unverified cached data")
+
+    metadata_path = tmp_path / ".example.zip.pylinac-cache.json"
+    assert not metadata_path.exists()
+
+    result = io.retrieve_demo_file("example.zip")
+
+    assert result.read_bytes() == b"downloaded demo data"
+    assert json.loads(metadata_path.read_text()) == {"generation": "123"}
+    blob.download_to_filename.assert_called_once()
