@@ -28,6 +28,7 @@ from google.api_core.exceptions import (
 )
 from google.auth.exceptions import TransportError
 from google.cloud import storage
+from platformdirs import user_cache_dir
 from tqdm import tqdm
 
 from .profile import SingleProfile
@@ -43,8 +44,10 @@ def _get_demo_file_generation(name: str) -> str:
 
 
 def _get_demo_dir() -> Path:
-    """Return the directory where demo files are stored."""
-    return Path(__file__).parent.parent / "demo_files"
+    """Return the directory used to cache demo files."""
+    demo_dir = Path(user_cache_dir("pylinac", appauthor=False)) / "demo_files"
+    demo_dir.mkdir(parents=True, exist_ok=True)
+    return demo_dir
 
 
 def is_dicom(file: str | Path) -> bool:

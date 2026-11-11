@@ -629,3 +629,17 @@ def test_retrieve_demo_file_downloads_when_metadata_is_missing(tmp_path, monkeyp
     assert result.read_bytes() == b"downloaded demo data"
     assert json.loads(metadata_path.read_text()) == {"generation": "123"}
     blob.download_to_filename.assert_called_once()
+
+
+def test_get_demo_dir_uses_platform_cache(tmp_path, monkeypatch):
+    def mock_user_cache_dir(appname, appauthor=False):
+        assert appname == "pylinac"
+        assert appauthor is False
+        return str(tmp_path)
+
+    monkeypatch.setattr(io, "user_cache_dir", mock_user_cache_dir)
+
+    demo_dir = io._get_demo_dir()
+
+    assert demo_dir == tmp_path / "demo_files"
+    assert demo_dir.is_dir()
